@@ -55,6 +55,31 @@ dependencies {
         }
     }
 
+    // vkapriltag_jni does not yet publish to maven.photonvision.org - see
+    // vkapriltag-jni's own repo, which builds and tests the native shim via a
+    // hand-rolled CMake build rather than the real WPILib GradleJni/
+    // NativeUtils artifact pipeline. Once it does, this becomes:
+    //
+    //   if (jniPlatform == "linuxarm64" || jniPlatform == "linuxx86-64") {
+    //       wpilibNatives("org.photonvision:vkapriltag_jni-jni:$vkAprilTagVersion:$jniPlatform") {
+    //           transitive = false
+    //       }
+    //   }
+    //   implementation("org.photonvision:vkapriltag_jni-java:$vkAprilTagVersion") {
+    //       transitive = false
+    //   }
+    //
+    // For now, the -java classes (just VkAprilTagJNI + VkAprilTagDeviceInfo -
+    // native method declarations and a record, no native code) are pulled
+    // from a locally built jar so VkAprilTagAvailability/PipelineType wiring
+    // compiles and can be reasoned about; there is deliberately no
+    // wpilibNatives entry here, since the native .so this jar's methods
+    // declare has nowhere real to come from yet. LoadJNI.forceLoad already
+    // wraps every call site in try/catch(UnsatisfiedLinkError), so a build
+    // with no native lib present degrades to "Vulkan detector unavailable",
+    // not a crash.
+    implementation files("libs/vkapriltag_jni-java-0.1.0-local.jar")
+
     implementation("org.photonvision:rknn_jni-java:$rknnVersion") {
         transitive = false
     }
