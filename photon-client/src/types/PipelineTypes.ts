@@ -11,7 +11,10 @@ export enum PipelineType {
   ColoredShape = 4,
   AprilTag = 5,
   Aruco = 6,
-  ObjectDetection = 7
+  ObjectDetection = 7,
+  // Must match Java: PipelineType.AprilTagVulkan is appended last (ordinal 8) so that
+  // DataSocketHandler's baseIndex -> ordinal mapping (values()[baseIndex + 3]) stays valid.
+  AprilTagVulkan = 8
 }
 
 export enum AprilTagFamily {
@@ -302,6 +305,43 @@ export const DefaultAprilTagPipelineSettings: AprilTagPipelineSettings = {
   doSingleTargetAlways: false
 };
 
+// BETA. Deliberately has no decimate/blur/refineEdges - the Vulkan backend runs a fixed 2x
+// decimation with no pre-blur stage and no edge refinement, so unlike a toggle inside
+// AprilTagPipelineSettings, there's no control here that would silently do nothing.
+export interface VkAprilTagPipelineSettings extends PipelineSettings {
+  pipelineType: PipelineType.AprilTagVulkan;
+  hammingDist: number;
+  numIterations: number;
+  decisionMargin: number;
+  tagFamily: AprilTagFamily;
+  doMultiTarget: boolean;
+  doSingleTargetAlways: boolean;
+  // -1 = automatic (vkapriltag's own scored device selection)
+  vulkanDeviceIndex: number;
+  cpuThreads: number;
+}
+export type ConfigurableVkAprilTagPipelineSettings = Partial<
+  Omit<VkAprilTagPipelineSettings, "pipelineType" | "hammingDist">
+> &
+  ConfigurablePipelineSettings;
+export const DefaultVkAprilTagPipelineSettings: VkAprilTagPipelineSettings = {
+  ...DefaultPipelineSettings,
+  cameraGain: 75,
+  targetModel: TargetModel.AprilTag6p5in_36h11,
+  ledMode: false,
+  outputMaximumTargets: 127,
+  cameraExposureRaw: 20,
+  pipelineType: PipelineType.AprilTagVulkan,
+  hammingDist: 0,
+  numIterations: 40,
+  decisionMargin: 35,
+  tagFamily: AprilTagFamily.Family36h11,
+  doMultiTarget: false,
+  doSingleTargetAlways: false,
+  vulkanDeviceIndex: -1,
+  cpuThreads: 0
+};
+
 export interface ArucoPipelineSettings extends PipelineSettings {
   pipelineType: PipelineType.Aruco;
 
@@ -392,6 +432,7 @@ export type ActivePipelineSettings =
   | ReflectivePipelineSettings
   | ColoredShapePipelineSettings
   | AprilTagPipelineSettings
+  | VkAprilTagPipelineSettings
   | ArucoPipelineSettings
   | ObjectDetectionPipelineSettings
   | Calibration3dPipelineSettings;
@@ -400,6 +441,7 @@ export type ActiveConfigurablePipelineSettings =
   | ConfigurableReflectivePipelineSettings
   | ConfigurableColoredShapePipelineSettings
   | ConfigurableAprilTagPipelineSettings
+  | ConfigurableVkAprilTagPipelineSettings
   | ConfigurableArucoPipelineSettings
   | ConfigurableObjectDetectionPipelineSettings
   | ConfigurableCalibration3dPipelineSettings;
