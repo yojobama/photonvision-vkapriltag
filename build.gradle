@@ -45,6 +45,10 @@ ext {
     tfliteVersion = "v2027.0.2-alpha-1"
     wpilibYear = "2027_alpha5"
     mrcalVersion = "dev-v2027.0.2-6-gb65c352";
+    // See photon-core/build.gradle's dependency block: resolves against
+    // mavenLocal() until vkapriltag_jni has a real maven.photonvision.org
+    // publish.
+    vkAprilTagVersion = "0.1.0-local";
 
     pubVersion = versionString
     isDev = pubVersion.startsWith("dev")
