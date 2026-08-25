@@ -233,27 +233,58 @@ public class VkAprilTagTest {
         assertSameDetections(vulkan, cpu, true);
     }
 
+    /**
+     * NOT a Vulkan-vs-CPU comparison: {@code 36h11_stress_test.png} is 3256x<b>1228</b>, and 1228
+     * is not a multiple of 8 - vkapriltag's own hard requirement (see
+     * {@link #testVulkanFallsBackToCpuOnUnsupportedFrameSize}). Found by running this test suite
+     * against real hardware: the first version of this test asserted {@code isVulkanActive()} here
+     * and failed, not because anything was broken, but because this specific fixture can never run
+     * on the GPU path at all. Repurposed into exactly what it actually exercises - the fallback
+     * behaving correctly on a real many-target image, not a synthetic blank frame - and left a
+     * note here rather than quietly asserting something the fixture can't support. A fixture whose
+     * dimensions actually satisfy vkapriltag's constraint would be needed for real many-tag Vulkan
+     * coverage; {@link #testVulkanMatchesLibapriltag_singleTag36h11} and
+     * {@link #testVulkanMatchesLibapriltag_16h5Family} are what currently exercise the real GPU
+     * path.
+     */
     @Test
-    public void testVulkanMatchesLibapriltag_manyTags() {
-        assumeTrue(VkAprilTagAvailability.isSupported(), "No Vulkan-capable device on this machine");
-
-        // outputMaximumTargets defaults to 127 (Byte.MAX_VALUE) and both pipelines clip to it
-        // identically after detection (see AbstractAprilTagPipeline.process) - raised here so the
-        // ID-set comparison below isn't just checking that both pipelines clip the same way.
+    public void testVulkanFallsBackToCpuOnStressTestImage() {
+        // Not compared with assertSameDetections(): this fixture tiles the same handful of tag
+        // IDs at ~8 different physical positions each (that's what makes it a "stress test" -
+        // detecting the same ID repeatedly rather than a genuinely unique tag per instance), and
+        // ID-keyed corner matching assumes unique IDs (mirroring vkapriltag's own
+        // validate_common.h, whose validation corpus is unique-ID). Both runs below are the same
+        // WPILib CPU AprilTagDetector code path anyway - there is no Vulkan/CPU distinction to
+        // compare here - so a plain target-count sanity check is what this test actually needs.
         List<TrackedTarget> cpu =
                 runCpu(
                         TestUtils.ApriltagTestImages.k36h11_stress_test,
                         AprilTagFamily.kTag36h11,
                         TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false),
                         300);
-        List<TrackedTarget> vulkan =
-                runVulkan(
-                        TestUtils.ApriltagTestImages.k36h11_stress_test,
-                        AprilTagFamily.kTag36h11,
-                        TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false),
-                        300);
+        assertTrue(cpu.size() > 100, "Expected the many-tag fixture to still decode well over 100 tags");
 
-        assertSameDetections(vulkan, cpu, true);
+        try (var pipeline = new VkAprilTagPipeline()) {
+            pipeline.getSettings().tagFamily = AprilTagFamily.kTag36h11;
+            pipeline.getSettings().solvePNPEnabled = false;
+            pipeline.getSettings().outputMaximumTargets = 300;
+            try (var frameProvider =
+                    new FileFrameProvider(
+                            TestUtils.getApriltagImagePath(TestUtils.ApriltagTestImages.k36h11_stress_test, false),
+                            TestUtils.WPI2020Image.FOV,
+                            TestUtils.getCoeffs(TestUtils.LIMELIGHT_480P_CAL_FILE, false))) {
+                frameProvider.requestFrameThresholdType(pipeline.getThresholdType());
+                try (CVPipelineResult result = pipeline.run(frameProvider.get(), QuirkyCamera.DefaultCamera)) {
+                    assertFalse(
+                            pipeline.isVulkanActive(),
+                            "1228px height is not a multiple of 8; Vulkan must not activate for this fixture");
+                    assertEquals(
+                            cpu.size(),
+                            result.targets.size(),
+                            "Fallback CPU detection produced a different target count on a repeated run");
+                }
+            }
+        }
     }
 
     /**
